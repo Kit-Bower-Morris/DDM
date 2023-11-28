@@ -69,13 +69,13 @@ class Preprocessor:
             for wav_name in os.listdir(os.path.join(self.in_dir, speaker)):
                 if ".wav" not in wav_name:
                     continue
-
+                subfolder = wav_name.split("_")[1]
                 basename = wav_name.split(".")[0]
                 tg_path = os.path.join(
-                    self.out_dir, "TextGrid", speaker, "{}.TextGrid".format(basename)
+                    self.out_dir, "TextGrid", speaker, subfolder, "{}.TextGrid".format(basename)
                 )
                 if os.path.exists(tg_path):
-                    ret = self.process_utterance(speaker, basename)
+                    ret = self.process_utterance(speaker, subfolder, basename)
                     if ret is None:
                         continue
                     else:
@@ -152,11 +152,11 @@ class Preprocessor:
 
         return out
 
-    def process_utterance(self, speaker, basename):
+    def process_utterance(self, speaker, subfolder, basename):
         wav_path = os.path.join(self.in_dir, speaker, "{}.wav".format(basename))
         text_path = os.path.join(self.in_dir, speaker, "{}.lab".format(basename))
         tg_path = os.path.join(
-            self.out_dir, "TextGrid", speaker, "{}.TextGrid".format(basename)
+            self.out_dir, "TextGrid", speaker, subfolder, "{}.TextGrid".format(basename)
         )
 
         # Get alignments
