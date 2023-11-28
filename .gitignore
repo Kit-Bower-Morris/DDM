@@ -3,3 +3,4 @@ FastSpeech2/preprocessed_data/LibriTTS/energy/
 FastSpeech2/preprocessed_data/LibriTTS/mel/
 FastSpeech2/preprocessed_data/LibriTTS/pitch/
 FastSpeech2/preprocessed_data/LibriTTS/TextGrid
+FastSpeech2/preprocessed_data/LibriTTS/train.txt
