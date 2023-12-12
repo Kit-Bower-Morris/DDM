@@ -20,14 +20,13 @@ variance_embedding:
   energy_quantization: "linear" # support 'linear' or 'log', 'log' is allowed only if the energy values are not normalized during preprocessing
   n_bins: 256
 
- gst:
-  conv_filters: [32, 32, 64, 64, 128, 128]
-  n_style_token: 10
-  attn_head: 4
-  num_mel: 80
-  gst_embedding_dim: 256
-
-
+# gst:
+#   use_gst: False
+#   conv_filters: [32, 32, 64, 64, 128, 128]
+#   gru_hidden: 128
+#   token_size: 128
+#   n_style_token: 10
+#   attn_head: 4
 
 multi_speaker: False
 

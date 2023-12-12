@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from transformer import Encoder, Decoder, PostNet
 from .modules import VarianceAdaptor
+from .gst import GST
 from utils.tools import get_mask_from_lengths
 
 
@@ -16,8 +17,8 @@ class FastSpeech2(nn.Module):
     def __init__(self, preprocess_config, model_config):
         super(FastSpeech2, self).__init__()
         self.model_config = model_config
-
         self.encoder = Encoder(model_config)
+        self.gst_layer = GST(model_config)
         self.variance_adaptor = VarianceAdaptor(preprocess_config, model_config)
         self.decoder = Decoder(model_config)
         self.mel_linear = nn.Linear(
@@ -64,12 +65,19 @@ class FastSpeech2(nn.Module):
         )
 
         output = self.encoder(texts, src_masks)
+        print(output.size())
+        gst_output = self.gst_layer(mels) 
+        gst_output_ = gst_output.expand(output.size(0), output.size(1), -1)
+        print(gst_output_.size())
+        output = torch.cat([output, gst_output_], dim=-1)
+        print(output.size)
 
         if self.speaker_emb is not None:
             output = output + self.speaker_emb(speakers).unsqueeze(1).expand(
                 -1, max_src_len, -1
             )
-
+        
+        
         (
             output,
             p_predictions,
