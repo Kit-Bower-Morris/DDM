@@ -3,20 +3,23 @@ import math
 import os
 
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 from text import text_to_sequence
 from utils.tools import pad_1D, pad_2D
-
+#from mel_check import test
+#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Dataset(Dataset):
     def __init__(
-        self, filename, preprocess_config, train_config, sort=False, drop_last=False
+        self, filename, config, device, sort=False, drop_last=False
     ):
-        self.dataset_name = preprocess_config["dataset"]
-        self.preprocessed_path = preprocess_config["path"]["preprocessed_path"]
-        self.cleaners = preprocess_config["preprocessing"]["text"]["text_cleaners"]
-        self.batch_size = train_config["optimizer"]["batch_size"]
+        self.device = device
+        self.dataset_name = config["dataset"]
+        self.preprocessed_path = config["preprocessed_path"]
+        self.cleaners = config["text_cleaners"]
+        self.batch_size = config["batch_size"]
 
         self.basename, self.speaker, self.text, self.raw_text = self.process_meta(
             filename
@@ -99,6 +102,17 @@ class Dataset(Dataset):
         energies = [data[idx]["energy"] for idx in idxs]
         durations = [data[idx]["duration"] for idx in idxs]
 
+
+        #text_lens = torch.tensor(np.array([text.shape[0] for text in texts]))
+        #mel_lens = torch.tensor(np.array([mel.shape[0] for mel in mels]))
+        
+        #speakers = np.array(speakers)
+        #texts = torch.tensor(pad_1D(texts))
+        #mels = torch.tensor(pad_2D(mels))
+        #pitches = torch.tensor(pad_1D(pitches)).to(torch.float32)
+        #energies = torch.tensor(pad_1D(energies))
+        #durations = torch.tensor(pad_1D(durations))
+
         text_lens = np.array([text.shape[0] for text in texts])
         mel_lens = np.array([mel.shape[0] for mel in mels])
 
@@ -109,53 +123,58 @@ class Dataset(Dataset):
         energies = pad_1D(energies)
         durations = pad_1D(durations)
 
-        return (
-            ids,
-            raw_texts,
-            speakers,
-            texts,
-            text_lens,
-            max(text_lens),
-            mels,
-            mel_lens,
-            max(mel_lens),
-            pitches,
-            energies,
-            durations,
-        )
+        speakers = torch.from_numpy(speakers).long().to(self.device)
+        texts = torch.from_numpy(texts).long().to(self.device)
+        text_lens = torch.from_numpy(text_lens).to(self.device)
+        mels = torch.from_numpy(mels).float().to(self.device)
+        mel_lens = torch.from_numpy(mel_lens).to(self.device)
+        pitches = torch.from_numpy(pitches).float().to(self.device)
+        energies = torch.from_numpy(energies).to(self.device)
+        durations = torch.from_numpy(durations).long().to(self.device)
+
+        #test(mels, mel_lens)
+
+        return {
+            'ids': ids,
+            'raw_texts': raw_texts,
+            'speakers': speakers,
+            'texts': texts,
+            'text_lens': text_lens,
+            'max_text_lens': max(text_lens),
+            'mels': mels,
+            'mel_lens': mel_lens,
+            'max_mel_lens': max(mel_lens),
+            'pitches': pitches,
+            'energies': energies,
+            'durations': durations,
+        }
 
     def collate_fn(self, data):
         data_size = len(data)
-
         if self.sort:
             len_arr = np.array([d["text"].shape[0] for d in data])
             idx_arr = np.argsort(-len_arr)
         else:
             idx_arr = np.arange(data_size)
-
-        tail = idx_arr[len(idx_arr) - (len(idx_arr) % self.batch_size) :]
-        idx_arr = idx_arr[: len(idx_arr) - (len(idx_arr) % self.batch_size)]
-        idx_arr = idx_arr.reshape((-1, self.batch_size)).tolist()
-        if not self.drop_last and len(tail) > 0:
-            idx_arr += [tail.tolist()]
+        idx_arr = [idx_arr.tolist()]
 
         output = list()
         for idx in idx_arr:
             output.append(self.reprocess(data, idx))
 
-        return output
+        return output[0]
 
 
 class TextDataset(Dataset):
-    def __init__(self, filepath, preprocess_config):
-        self.cleaners = preprocess_config["preprocessing"]["text"]["text_cleaners"]
+    def __init__(self, filepath, config):
+        self.cleaners = config["text_cleaners"]
 
         self.basename, self.speaker, self.text, self.raw_text = self.process_meta(
             filepath
         )
         with open(
             os.path.join(
-                preprocess_config["path"]["preprocessed_path"], "speakers.json"
+                config["preprocessed_path"], "speakers.json"
             )
         ) as f:
             self.speaker_map = json.load(f)
@@ -198,58 +217,3 @@ class TextDataset(Dataset):
         return ids, raw_texts, speakers, texts, text_lens, max(text_lens)
 
 
-if __name__ == "__main__":
-    # Test
-    import torch
-    import yaml
-    from torch.utils.data import DataLoader
-    from utils.utils import to_device
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    preprocess_config = yaml.load(
-        open("./config/LJSpeech/preprocess.yaml", "r"), Loader=yaml.FullLoader
-    )
-    train_config = yaml.load(
-        open("./config/LJSpeech/train.yaml", "r"), Loader=yaml.FullLoader
-    )
-
-    train_dataset = Dataset(
-        "train.txt", preprocess_config, train_config, sort=True, drop_last=True
-    )
-    val_dataset = Dataset(
-        "val.txt", preprocess_config, train_config, sort=False, drop_last=False
-    )
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=train_config["optimizer"]["batch_size"] * 4,
-        shuffle=True,
-        collate_fn=train_dataset.collate_fn,
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=train_config["optimizer"]["batch_size"],
-        shuffle=False,
-        collate_fn=val_dataset.collate_fn,
-    )
-
-    n_batch = 0
-    for batchs in train_loader:
-        for batch in batchs:
-            to_device(batch, device)
-            n_batch += 1
-    print(
-        "Training set  with size {} is composed of {} batches.".format(
-            len(train_dataset), n_batch
-        )
-    )
-
-    n_batch = 0
-    for batchs in val_loader:
-        for batch in batchs:
-            to_device(batch, device)
-            n_batch += 1
-    print(
-        "Validation set  with size {} is composed of {} batches.".format(
-            len(val_dataset), n_batch
-        )
-    )

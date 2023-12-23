@@ -9,14 +9,14 @@ class GST(nn.Module):
     See https://arxiv.org/pdf/1803.09017"""
     def __init__(self, config):
         super(GST, self).__init__()
-        num_mel = ['gst']['num_mel']
-        gst_embedding_dim = config['gst']['gst_embedding_dim']
-        conv_filters = config['gst']['conv_filters']
-        num_heads = config['gst']['attn_head']
-        num_style_tokens = config['gst']['n_style_token']
+        num_mel = config['num_mel']
+        gst_embedding_dim = config['gst_embedding_dim']
+        conv_filters = config['conv_filters']
+        num_heads = config['attn_head']
+        num_style_tokens = config['n_style_token']
         self.encoder = ReferenceEncoder(num_mel, gst_embedding_dim, conv_filters)
         self.style_token_layer = StyleTokenLayer(num_heads, num_style_tokens, gst_embedding_dim)
-
+    
     def forward(self, inputs, speaker_embedding=None):
         enc_out = self.encoder(inputs)
         # concat speaker_embedding

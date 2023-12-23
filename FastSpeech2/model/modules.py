@@ -17,29 +17,25 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class VarianceAdaptor(nn.Module):
     """Variance Adaptor"""
 
-    def __init__(self, preprocess_config, model_config):
+    def __init__(self, config):
         super(VarianceAdaptor, self).__init__()
-        self.duration_predictor = VariancePredictor(model_config)
+        self.duration_predictor = VariancePredictor(config)
         self.length_regulator = LengthRegulator()
-        self.pitch_predictor = VariancePredictor(model_config)
-        self.energy_predictor = VariancePredictor(model_config)
+        self.pitch_predictor = VariancePredictor(config)
+        self.energy_predictor = VariancePredictor(config)
 
-        self.pitch_feature_level = preprocess_config["preprocessing"]["pitch"][
-            "feature"
-        ]
-        self.energy_feature_level = preprocess_config["preprocessing"]["energy"][
-            "feature"
-        ]
+        self.pitch_feature_level = config["feature"]
+        self.energy_feature_level = config["feature"]
         assert self.pitch_feature_level in ["phoneme_level", "frame_level"]
         assert self.energy_feature_level in ["phoneme_level", "frame_level"]
 
-        pitch_quantization = model_config["variance_embedding"]["pitch_quantization"]
-        energy_quantization = model_config["variance_embedding"]["energy_quantization"]
-        n_bins = model_config["variance_embedding"]["n_bins"]
+        pitch_quantization = config["pitch_quantization"]
+        energy_quantization = config["energy_quantization"]
+        n_bins = config["n_bins"]
         assert pitch_quantization in ["linear", "log"]
         assert energy_quantization in ["linear", "log"]
         with open(
-            os.path.join(preprocess_config["path"]["preprocessed_path"], "stats.json")
+            os.path.join(config["preprocessed_path"], "stats.json")
         ) as f:
             stats = json.load(f)
             pitch_min, pitch_max = stats["pitch"][:2]
@@ -71,10 +67,10 @@ class VarianceAdaptor(nn.Module):
             )
 
         self.pitch_embedding = nn.Embedding(
-            n_bins, model_config["transformer"]["encoder_hidden"]
+            n_bins, config["encoder_hidden"]
         )
         self.energy_embedding = nn.Embedding(
-            n_bins, model_config["transformer"]["encoder_hidden"]
+            n_bins, config["encoder_hidden"]
         )
 
     def get_pitch_embedding(self, x, target, mask, control):
@@ -197,14 +193,14 @@ class LengthRegulator(nn.Module):
 class VariancePredictor(nn.Module):
     """Duration, Pitch and Energy Predictor"""
 
-    def __init__(self, model_config):
+    def __init__(self, config):
         super(VariancePredictor, self).__init__()
 
-        self.input_size = model_config["transformer"]["encoder_hidden"]
-        self.filter_size = model_config["variance_predictor"]["filter_size"]
-        self.kernel = model_config["variance_predictor"]["kernel_size"]
-        self.conv_output_size = model_config["variance_predictor"]["filter_size"]
-        self.dropout = model_config["variance_predictor"]["dropout"]
+        self.input_size = config["encoder_hidden"]
+        self.filter_size = config["filter_size"]
+        self.kernel = config["kernel_size"]
+        self.conv_output_size = config["filter_size"]
+        self.dropout = config["dropout"]
 
         self.conv_layer = nn.Sequential(
             OrderedDict(

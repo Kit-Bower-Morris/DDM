@@ -38,17 +38,17 @@ class Encoder(nn.Module):
 
         n_position = config["max_seq_len"] + 1
         n_src_vocab = len(symbols) + 1
-        d_word_vec = config["transformer"]["encoder_hidden"]
-        n_layers = config["transformer"]["encoder_layer"]
-        n_head = config["transformer"]["encoder_head"]
+        d_word_vec = config["encoder_hidden"]
+        n_layers = config["encoder_layer"]
+        n_head = config["encoder_head"]
         d_k = d_v = (
-            config["transformer"]["encoder_hidden"]
-            // config["transformer"]["encoder_head"]
+            config["encoder_hidden"]
+            // config["encoder_head"]
         )
-        d_model = config["transformer"]["encoder_hidden"]
-        d_inner = config["transformer"]["conv_filter_size"]
-        kernel_size = config["transformer"]["conv_kernel_size"]
-        dropout = config["transformer"]["encoder_dropout"]
+        d_model = config["encoder_hidden"]
+        d_inner = config["conv_filter_size"]
+        kernel_size = config["conv_kernel_size"]
+        dropout = config["encoder_dropout"]
 
         self.max_seq_len = config["max_seq_len"]
         self.d_model = d_model
@@ -86,6 +86,7 @@ class Encoder(nn.Module):
                 src_seq.device
             )
         else:
+            print(type(src_seq))
             enc_output = self.src_word_emb(src_seq) + self.position_enc[
                 :, :max_len, :
             ].expand(batch_size, -1, -1)
@@ -107,17 +108,17 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         n_position = config["max_seq_len"] + 1
-        d_word_vec = config["transformer"]["decoder_hidden"]
-        n_layers = config["transformer"]["decoder_layer"]
-        n_head = config["transformer"]["decoder_head"]
+        d_word_vec = config["decoder_hidden"]
+        n_layers = config["decoder_layer"]
+        n_head = config["decoder_head"]
         d_k = d_v = (
-            config["transformer"]["decoder_hidden"]
-            // config["transformer"]["decoder_head"]
+            config["decoder_hidden"]
+            // config["decoder_head"]
         )
-        d_model = config["transformer"]["decoder_hidden"]
-        d_inner = config["transformer"]["conv_filter_size"]
-        kernel_size = config["transformer"]["conv_kernel_size"]
-        dropout = config["transformer"]["decoder_dropout"]
+        d_model = config["decoder_hidden"]
+        d_inner = config["conv_filter_size"]
+        kernel_size = config["conv_kernel_size"]
+        dropout = config["decoder_dropout"]
 
         self.max_seq_len = config["max_seq_len"]
         self.d_model = d_model

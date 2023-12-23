@@ -1,42 +1,33 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 
 class FastSpeech2Loss(nn.Module):
     """ FastSpeech2 Loss """
 
-    def __init__(self, preprocess_config, model_config):
+    def __init__(self, config):
         super(FastSpeech2Loss, self).__init__()
-        self.pitch_feature_level = preprocess_config["preprocessing"]["pitch"][
-            "feature"
-        ]
-        self.energy_feature_level = preprocess_config["preprocessing"]["energy"][
-            "feature"
-        ]
+        self.pitch_feature_level = config["feature"]
+        self.energy_feature_level = config["feature"]
         self.mse_loss = nn.MSELoss()
         self.mae_loss = nn.L1Loss()
 
-    def forward(self, inputs, predictions):
-        (
-            mel_targets,
-            _,
-            _,
-            pitch_targets,
-            energy_targets,
-            duration_targets,
-        ) = inputs[6:]
-        (
-            mel_predictions,
-            postnet_mel_predictions,
-            pitch_predictions,
-            energy_predictions,
-            log_duration_predictions,
-            _,
-            src_masks,
-            mel_masks,
-            _,
-            _,
-        ) = predictions
+    def forward(self, batch, predictions):
+
+        mel_targets = batch['mels']
+        pitch_targets = batch['pitches']
+        energy_targets = batch['energies']
+        duration_targets = batch['durations']
+
+        mel_predictions = predictions['output']
+        postnet_mel_predictions = predictions['postnet_output']
+        pitch_predictions = predictions['p_predictions']
+        energy_predictions = predictions['e_predictions']
+        log_duration_predictions = predictions['log_d_predictions']
+        src_masks = predictions['src_masks']
+        mel_masks = predictions['mel_masks']
+
         src_masks = ~src_masks
         mel_masks = ~mel_masks
         log_duration_targets = torch.log(duration_targets.float() + 1)
@@ -74,6 +65,7 @@ class FastSpeech2Loss(nn.Module):
         mel_loss = self.mae_loss(mel_predictions, mel_targets)
         postnet_mel_loss = self.mae_loss(postnet_mel_predictions, mel_targets)
 
+
         pitch_loss = self.mse_loss(pitch_predictions, pitch_targets)
         energy_loss = self.mse_loss(energy_predictions, energy_targets)
         duration_loss = self.mse_loss(log_duration_predictions, log_duration_targets)
@@ -82,11 +74,11 @@ class FastSpeech2Loss(nn.Module):
             mel_loss + postnet_mel_loss + duration_loss + pitch_loss + energy_loss
         )
 
-        return (
-            total_loss,
-            mel_loss,
-            postnet_mel_loss,
-            pitch_loss,
-            energy_loss,
-            duration_loss,
-        )
+        return {
+            'loss': total_loss,
+            'mel_loss': mel_loss,
+            'postnet_mel_loss': postnet_mel_loss,
+            'pitch_loss': pitch_loss,
+            'energy_loss': energy_loss,
+            'duration_loss': duration_loss,
+        }
