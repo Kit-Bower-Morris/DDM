@@ -9,7 +9,7 @@ class Fastspeech2Config(TrainerConfig):
     dataset: str = "LJSpeech"
     
     #data paths
-    preprocessed_path: str = "D:/Chimera/Chopra/dataset/data/preprocessed_data/"
+    preprocessed_path: str = "/content/data"
     corpus_path: str = "/home/ming/Data/LJSpeech-1.1"
     lexicon_path: str = "lexicon/librispeech-lexicon.txt"
     output_path: str = "./output/"
@@ -17,14 +17,16 @@ class Fastspeech2Config(TrainerConfig):
     ckpt_path: str = "./output/ckpt/LJSpeech"
     log_path: str = "./output/log/LJSpeech"
     result_path: str = "./output/result/LJSpeech"
+    #logger_uri: str = "tests"
+    #run_name: str = 'gst_test'
     
     #training
     batch_size: int = 16
     multi_speaker: bool = False
     dashboard_logger: str = "tensorboard"
-    epochs: int = 20
-    print_step: int = 5
-    save_step: int = 5
+    epochs: int = 370
+    print_step: int = 25
+    save_step: int = 10000
     plot_step: int = 5
     data_path: List[str] = field(default_factory=lambda:["train.txt", "val.txt"])
     max_seq_len: int = 1000

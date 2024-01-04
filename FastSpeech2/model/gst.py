@@ -53,6 +53,7 @@ class ReferenceEncoder(nn.Module):
         self.recurrence = nn.GRU(
             input_size=filters[-1] * post_conv_height, hidden_size=embedding_dim // 2, batch_first=True
         )
+        self.dropout = nn.Dropout(0.5)
 
     def forward(self, inputs):
         batch_size = inputs.size(0)
@@ -62,6 +63,7 @@ class ReferenceEncoder(nn.Module):
             x = conv(x)
             x = bn(x)
             x = F.relu(x)
+            x = self.dropout(x)
 
         x = x.transpose(1, 2)
         # x: 4D tensor [batch_size, post_conv_width,
@@ -101,6 +103,7 @@ class StyleTokenLayer(nn.Module):
         self.attention = MultiHeadAttention(
             query_dim=self.query_dim, key_dim=self.key_dim, num_units=gst_embedding_dim, num_heads=num_heads
         )
+        self.dropout = nn.Dropout(0.5)
 
     def forward(self, inputs):
         batch_size = inputs.size(0)
@@ -109,6 +112,7 @@ class StyleTokenLayer(nn.Module):
         tokens = torch.tanh(self.style_tokens).unsqueeze(0).expand(batch_size, -1, -1)
         # tokens: 3D tensor [batch_size, num tokens, token embedding size]
         style_embed = self.attention(prosody_encoding, tokens)
+        style_embed = self.dropout(style_embed)
 
         return style_embed
 

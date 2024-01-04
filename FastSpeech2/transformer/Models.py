@@ -86,7 +86,6 @@ class Encoder(nn.Module):
                 src_seq.device
             )
         else:
-            print(type(src_seq))
             enc_output = self.src_word_emb(src_seq) + self.position_enc[
                 :, :max_len, :
             ].expand(batch_size, -1, -1)

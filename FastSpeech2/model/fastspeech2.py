@@ -65,13 +65,16 @@ class FastSpeech2(nn.Module):
         d_control=1.0,
     ):
         src_masks = get_mask_from_lengths(src_lens, max_src_len)
+        print(type(mel_lens))
+        print(mel_lens.size())
         mel_masks = (
             get_mask_from_lengths(mel_lens, max_mel_len)
             if mel_lens is not None
             else None
         )
         output = self.encoder(texts, src_masks)
-        gst_output = self.gst_layer(mels) 
+        gst_output = self.gst_layer(mels)
+
         gst_output_ = gst_output.expand(output.size(0), output.size(1), -1)
         output = output + gst_output_
 
@@ -103,6 +106,8 @@ class FastSpeech2(nn.Module):
             e_control,
             d_control,
         )
+        print('mel_mask:')
+        print(mel_masks.size())
         output, mel_masks = self.decoder(output, mel_masks)
         
         output = self.mel_linear(output)
@@ -151,7 +156,7 @@ class FastSpeech2(nn.Module):
         losses = criterion(batch, output)
         return output, losses
 
-    @torch.no_grad()
+
     def eval_step(self, batch, criterion):
         return self.train_step(batch, criterion)
     

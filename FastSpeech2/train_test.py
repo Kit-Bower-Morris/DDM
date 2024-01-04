@@ -13,7 +13,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def main():
-    train_args = TrainerArgs()
     config = Fastspeech2Config()
 
     # init the model from config
@@ -22,7 +21,7 @@ def main():
 
     # init the trainer and 🚀
     trainer = Trainer(
-        train_args,
+        TrainerArgs(),
         config,
         config.output_path,
         model=model,
