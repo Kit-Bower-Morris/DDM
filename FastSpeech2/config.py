@@ -9,7 +9,7 @@ class Fastspeech2Config(TrainerConfig):
     dataset: str = "LJSpeech"
     
     #data paths
-    preprocessed_path: str = "/content/data"
+    preprocessed_path: str = "D:/Chimera/Chopra/dataset/data/preprocessed_data"
     corpus_path: str = "/home/ming/Data/LJSpeech-1.1"
     lexicon_path: str = "lexicon/librispeech-lexicon.txt"
     output_path: str = "./output/"
@@ -40,6 +40,7 @@ class Fastspeech2Config(TrainerConfig):
     synth_step: int = 1000
     val_step: int = 1000
     save_step: int = 100000
+    test_delay_epochs: int = 0
 
     #optimizer
     '''
@@ -112,3 +113,27 @@ class Fastspeech2Config(TrainerConfig):
     feature: str = "phoneme_level" # support 'phoneme_level' or 'frame_level'
     normalization: bool = True
 
+
+    test_sentences: List[str] = field(
+        default_factory=lambda: [
+            "It took me quite a long time to develop a voice, and now that I have it I'm not going to be silent.",
+            "Be a voice, not an echo.",
+            "I'm sorry Dave. I'm afraid I can't do that.",
+            "This cake is great. It's so delicious and moist.",
+            "Prior to November 22, 1963.",
+        ]
+    )
+
+    test_mels: List[str] = field(
+        default_factory=lambda: [
+            'test_audios/0014_000383.wav',
+            'test_audios/0014_000797.wav',
+            'test_audios/0014_000132.wav',
+            'test_audios/0014_001083.wav',
+            'test_audios/0014_001434.wav'
+        ]
+    )
+
+    duration_control: float = 1.0
+    pitch_control: float = 1.0
+    energy_control: float = 1.0

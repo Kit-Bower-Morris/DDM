@@ -129,16 +129,7 @@ def synth_one_sample(targets, predictions, vocoder, config):
     ) as f:
         stats = json.load(f)
         stats = stats["pitch"] + stats["energy"][:2]
-    '''
-    fig = plot_mel(
-        [
-            (mel_prediction.cpu().numpy(), pitch, energy),
-            (mel_target.cpu().numpy(), pitch, energy),
-        ],
-        stats,
-        ["Synthetized Spectrogram", "Ground-Truth Spectrogram"],
-    )
-    '''    
+
     figures = {"Synthetized Spectrogram": plot_mel([(mel_prediction.cpu().numpy(), pitch, energy)],stats, ["Synthetized Spectrogram"] ), 
                "Ground-Truth Spectrogram": plot_mel([(mel_target.cpu().numpy(), pitch, energy)],stats, ["Ground-Truth Spectrogram"] )}
 
@@ -163,6 +154,38 @@ def synth_one_sample(targets, predictions, vocoder, config):
     #wavfile.write(os.path.join('./results', "{}.wav".format(basename)), sampling_rate, wav_reconstruction)
 
     return figures, wav_reconstruction, wav_prediction, basename
+
+
+def synth_one_test(targets, predictions, vocoder, config):
+    basename = targets['ids'][0]
+    mel_len = predictions['mel_lens'][0].item()
+    mel_prediction = predictions['postnet_output'][0, :mel_len].detach().transpose(0, 1)
+
+    with open(
+        os.path.join(config["preprocessed_path"], "stats.json")
+    ) as f:
+        stats = json.load(f)
+        stats = stats["pitch"] + stats["energy"][:2]
+
+    figures = plot_mel([(mel_prediction.cpu().numpy())],stats, ["Synthetized Spectrogram"])
+               
+
+    if vocoder is not None:
+        from .model import vocoder_infer
+
+        wav_prediction = vocoder_infer(
+            mel_prediction.unsqueeze(0),
+            vocoder,
+            config,
+        )
+    else:
+        wav_prediction = None
+    
+    #wav_reconstruction = wav_reconstruction.astype("float32")
+    #sampling_rate = config["sampling_rate"]
+    #wavfile.write(os.path.join('./results', "{}.wav".format(basename)), sampling_rate, wav_reconstruction)
+
+    return figures, wav_prediction, basename
 
 
 def synth_samples(targets, predictions, vocoder, config, path):

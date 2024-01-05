@@ -1,18 +1,21 @@
 import re
 import argparse
 from string import punctuation
+import os
 
 import torch
-import yaml
+
 import numpy as np
 from torch.utils.data import DataLoader
 from g2p_en import G2p
 from pypinyin import pinyin, Style
 
-from utils.model import get_model, get_vocoder
-from utils.tools import to_device, synth_samples
+from utils.tools import to_device, synth_samples, pad_1D, pad_2D
+
 from dataset import TextDataset
 from text import text_to_sequence
+from model.fastspeech2 import FastSpeech2
+from config import Fastspeech2Config
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -29,9 +32,9 @@ def read_lexicon(lex_path):
     return lexicon
 
 
-def preprocess_english(text, preprocess_config):
+def preprocess_english(text, config):
     text = text.rstrip(punctuation)
-    lexicon = read_lexicon(preprocess_config["path"]["lexicon_path"])
+    lexicon = read_lexicon(config["lexicon_path"])
 
     g2p = G2p()
     phones = []
@@ -49,107 +52,45 @@ def preprocess_english(text, preprocess_config):
     print("Phoneme Sequence: {}".format(phones))
     sequence = np.array(
         text_to_sequence(
-            phones, preprocess_config["preprocessing"]["text"]["text_cleaners"]
+            phones, config["text_cleaners"]
         )
     )
 
     return np.array(sequence)
 
 
-def preprocess_mandarin(text, preprocess_config):
-    lexicon = read_lexicon(preprocess_config["path"]["lexicon_path"])
-
-    phones = []
-    pinyins = [
-        p[0]
-        for p in pinyin(
-            text, style=Style.TONE3, strict=False, neutral_tone_with_five=True
-        )
-    ]
-    for p in pinyins:
-        if p in lexicon:
-            phones += lexicon[p]
-        else:
-            phones.append("sp")
-
-    phones = "{" + " ".join(phones) + "}"
-    print("Raw Text Sequence: {}".format(text))
-    print("Phoneme Sequence: {}".format(phones))
-    sequence = np.array(
-        text_to_sequence(
-            phones, preprocess_config["preprocessing"]["text"]["text_cleaners"]
-        )
-    )
-
-    return np.array(sequence)
+def synthesize(model, config, batch):
+    from utils.model import get_vocoder
+    vocoder = get_vocoder(config, device)
 
 
-def synthesize(model, step, configs, vocoder, batchs, control_values):
-    preprocess_config, model_config, train_config = configs
-    pitch_control, energy_control, duration_control = control_values
+    with torch.no_grad():
+        # Forward
+        model.inference_step(batch, vocoder)
 
-    for batch in batchs:
-        batch = to_device(batch, device)
-        with torch.no_grad():
-            # Forward
-            output = model(
-                *(batch[2:]),
-                p_control=pitch_control,
-                e_control=energy_control,
-                d_control=duration_control
-            )
-            synth_samples(
-                batch,
-                output,
-                vocoder,
-                model_config,
-                preprocess_config,
-                train_config["path"]["result_path"],
-            )
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--restore_step", type=int, required=True)
-    parser.add_argument(
-        "--mode",
-        type=str,
-        choices=["batch", "single"],
-        required=True,
-        help="Synthesize a whole dataset or a single sentence",
-    )
-    parser.add_argument(
-        "--source",
-        type=str,
-        default=None,
-        help="path to a source file with format like train.txt and val.txt, for batch mode only",
-    )
+    #parser.add_argument("--restore_step", type=int)
+    parser.add_argument("--model_path", type=str, required=True)
+    #parser.add_argument("--config_path", type=str, required=True)
+
     parser.add_argument(
         "--text",
         type=str,
         default=None,
-        help="raw text to synthesize, for single-sentence mode only",
+        help="raw text to synthesize",
     )
+
     parser.add_argument(
         "--speaker_id",
         type=int,
         default=0,
         help="speaker ID for multi-speaker synthesis, for single-sentence mode only",
     )
-    parser.add_argument(
-        "-p",
-        "--preprocess_config",
-        type=str,
-        required=True,
-        help="path to preprocess.yaml",
-    )
-    parser.add_argument(
-        "-m", "--model_config", type=str, required=True, help="path to model.yaml"
-    )
-    parser.add_argument(
-        "-t", "--train_config", type=str, required=True, help="path to train.yaml"
-    )
+
     parser.add_argument(
         "--pitch_control",
         type=float,
@@ -170,45 +111,59 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Check source texts
-    if args.mode == "batch":
-        assert args.source is not None and args.text is None
-    if args.mode == "single":
-        assert args.source is None and args.text is not None
-
-    # Read Config
-    preprocess_config = yaml.load(
-        open(args.preprocess_config, "r"), Loader=yaml.FullLoader
-    )
-    model_config = yaml.load(open(args.model_config, "r"), Loader=yaml.FullLoader)
-    train_config = yaml.load(open(args.train_config, "r"), Loader=yaml.FullLoader)
-    configs = (preprocess_config, model_config, train_config)
+    config = Fastspeech2Config()
 
     # Get model
-    model = get_model(args, configs, device, train=False)
+    
+    model = FastSpeech2(config).to(device)
+ 
+    ckpt = torch.load(args.model_path)
 
-    # Load vocoder
-    vocoder = get_vocoder(model_config, device)
+    model.load_state_dict(ckpt, strict=False)
+    model.eval()
+    model.requires_grad_ = False
 
-    # Preprocess texts
-    if args.mode == "batch":
-        # Get dataset
-        dataset = TextDataset(args.source, preprocess_config)
-        batchs = DataLoader(
-            dataset,
-            batch_size=8,
-            collate_fn=dataset.collate_fn,
-        )
-    if args.mode == "single":
-        ids = raw_texts = [args.text[:100]]
-        speakers = np.array([args.speaker_id])
-        if preprocess_config["preprocessing"]["text"]["language"] == "en":
-            texts = np.array([preprocess_english(args.text, preprocess_config)])
-        elif preprocess_config["preprocessing"]["text"]["language"] == "zh":
-            texts = np.array([preprocess_mandarin(args.text, preprocess_config)])
-        text_lens = np.array([len(texts[0])])
-        batchs = [(ids, raw_texts, speakers, texts, text_lens, max(text_lens))]
 
-    control_values = args.pitch_control, args.energy_control, args.duration_control
+    ids = raw_texts = [args.text[:100]]
+    speakers = np.array([args.speaker_id])
+    texts = np.array([preprocess_english(args.text, config)])
+    text_lens = np.array([len(texts[0])])
+    mel_path = 'Chopra-mel-01_chunk5_split1.npy'
+    mels = np.load(mel_path)
+    mels = np.expand_dims(mels, axis=0)
+    mel_lens = np.array([mel.shape[0] for mel in mels])
+    pitches, energies, durations = args.pitch_control, args.energy_control, args.duration_control
+    text_lens = np.array([text.shape[0] for text in texts])
+    mel_lens = np.array([mel.shape[0] for mel in mels])
+    speakers = np.array(speakers)
+    #texts = pad_1D(texts)
+    #mels = pad_2D(mels)
+    #pitches = pad_1D(pitches)
+    #energies = pad_1D(energies)
+    #durations = pad_1D(durations)
+    speakers = torch.from_numpy(speakers).long().to(device)
+    texts = torch.from_numpy(texts).long().to(device)
+    text_lens = torch.from_numpy(text_lens).to(device)
+    mels = torch.from_numpy(mels).float().to(device)
+    #mels = torch.unsqueeze(mels, dim=0)
+    mel_lens = torch.from_numpy(mel_lens).to(device)
+    #pitches = torch.from_numpy(pitches).float().to(device)
+    #energies = torch.from_numpy(energies).to(device)
+    #durations = torch.from_numpy(durations).long().to(device)
+    batch =  {
+        'ids': ids,
+        'raw_texts': raw_texts,
+        'speakers': speakers,
+        'texts': texts,
+        'text_lens': text_lens,
+        'max_text_lens': max(text_lens),
+        'mels': mels,
+        'mel_lens': mel_lens,
+        'max_mel_lens': max(mel_lens),
+        'pitches': pitches,
+        'energies': energies,
+        'durations': durations,
+    }
 
-    synthesize(model, args.restore_step, configs, vocoder, batchs, control_values)
+
+    synthesize(model, config, batch)
